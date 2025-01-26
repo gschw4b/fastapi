@@ -1,29 +1,18 @@
----
-title: FastAPI
-description: A FastAPI server
-tags:
-  - fastapi
-  - hypercorn
-  - python
----
+# Projeto de Processamento de E-mails com Anexos XLSX e Conversão para CSV
 
-# FastAPI Example
+Este projeto tem como objetivo baixar e-mails não lidos com anexos `.xlsx`, converter esses arquivos para `.csv` e enviá-los de volta para o remetente.
 
-This example starts up a [FastAPI](https://fastapi.tiangolo.com/) server.
+## Funcionalidades
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/-NvLj4?referralCode=CRJ8FE)
-## ✨ Features
+- Conecta-se a um servidor de e-mails IMAP para buscar e-mails não lidos.
+- Baixa arquivos `.xlsx` anexados.
+- Converte os arquivos `.xlsx` para `.csv`.
+- Envia de volta os arquivos convertidos como anexos por e-mail usando SMTP.
 
-- FastAPI
-- [Hypercorn](https://hypercorn.readthedocs.io/)
-- Python 3
+## Tecnologias Utilizadas
 
-## 💁‍♀️ How to use
-
-- Clone locally and install packages with pip using `pip install -r requirements.txt`
-- Run locally using `hypercorn main:app --reload`
-
-## 📝 Notes
-
-- To learn about how to use FastAPI with most of its features, you can visit the [FastAPI Documentation](https://fastapi.tiangolo.com/tutorial/)
-- To learn about Hypercorn and how to configure it, read their [Documentation](https://hypercorn.readthedocs.io/)
+- **FastAPI**: Framework para a criação da API REST.
+- **Pandas**: Biblioteca para manipulação de dados e conversão de arquivos `.xlsx` para `.csv`.
+- **IMAP**: Para conectar e buscar e-mails não lidos.
+- **SMTP**: Para enviar e-mails com anexos.
+- **Python 3.12.3**

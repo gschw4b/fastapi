@@ -1,2 +1,4 @@
 fastapi==0.100.0
 hypercorn==0.14.4
+pandas
+openpyxl==3.1.2

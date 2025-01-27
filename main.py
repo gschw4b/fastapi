@@ -4,6 +4,7 @@ import tempfile
 import pandas as pd
 import smtplib
 import os
+import uuid
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -98,11 +99,13 @@ async def processar_email():
                     print(f"Arquivo .xlsx baixado: {arquivo_xlsx}")
                     arquivo_csv = converter_xlsx_para_csv(arquivo_xlsx)
                     print(f"Arquivo convertido para .csv: {arquivo_csv}")
+
+                    hash_aleatorio = uuid.uuid4().hex
                     
                     # Enviar de volta o arquivo convertido como anexo
                     enviar_email_com_anexo(
                         to_email=EMAIL_USER,  # Pode ajustar para o e-mail de destino
-                        subject="Arquivo CSV",
+                        subject=f"Arquivo CSV - {hash_aleatorio}",
                         body="Aqui está o arquivo CSV convertido.",
                         attachment_path=arquivo_csv
                     )

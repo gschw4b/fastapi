@@ -86,6 +86,24 @@ def enviar_email_com_anexo(to_email, subject, body, attachment_path):
     except Exception as e:
         print(f"Erro ao enviar o e-mail: {e}")
 
+def mover_para_lixeira(mail, email_id):
+    try:
+        # Defina a pasta da lixeira; ajuste conforme necessário para o Roundcube
+        pasta_lixeira = 'Trash'  # Altere para o nome correto caso seja diferente
+        
+        # Copiar o email para a pasta Lixeira
+        status = mail.copy(email_id, pasta_lixeira)
+        if status[0] != "OK":
+            raise Exception("Falha ao mover o email para a Lixeira.")
+        
+        # Marcar o email original como deletado na Caixa de Entrada
+        mail.store(email_id, '+FLAGS', '\\Deleted')
+        mail.expunge()  # Expurga os emails marcados como deletados
+        
+        print(f"Email ID {email_id} movido para a Lixeira com sucesso.")
+    except Exception as e:
+        print(f"Erro ao mover o email para a Lixeira: {e}")
+
 def deletar_email(email_hash: str):
     try:
         # Conectar ao servidor IMAP
@@ -140,14 +158,34 @@ async def processar_email():
 
                     hash_aleatorio = uuid.uuid4().hex
                     
+                    # Recuperar o remetente do e-mail
+                    status, response = mail.fetch(email_id, '(RFC822)')
+                    remetente = None
+                    for response_part in response:
+                        if isinstance(response_part, tuple):
+                            msg = email.message_from_bytes(response_part[1])
+                            remetente = msg["From"]
+                            break
+                    
+                    if not remetente:
+                        raise HTTPException(status_code=500, detail="Não foi possível identificar o remetente do e-mail.")
+                    
                     # Enviar de volta o arquivo convertido como anexo
                     enviar_email_com_anexo(
-                        to_email=EMAIL_USER,  # Pode ajustar para o e-mail de destino
+                        to_email=remetente,  # Enviar para o remetente original
                         subject=f"Arquivo CSV - {hash_aleatorio}",
                         body="Aqui está o arquivo CSV convertido.",
                         attachment_path=arquivo_csv
                     )
-                    return {"message": f"Email enviado com o anexo {arquivo_csv}"}
+                    print(f"E-mail enviado para {remetente} com o anexo {arquivo_csv}")
+                    
+                    # Mover o e-mail processado para a pasta "Lixeira"
+                    result = mail.store(email_id, '+X-GM-LABELS', '\\Trash')
+                    if result[0] != 'OK':
+                        raise HTTPException(status_code=500, detail="Não foi possível mover o e-mail para a pasta Lixeira.")
+                    mail.expunge()
+                    
+                    return {"message": f"Email enviado para {remetente} e movido para a pasta Lixeira."}
                 else:
                     return HTTPException(status_code=404, detail="Nenhum anexo .xlsx encontrado no e-mail.")
         else:

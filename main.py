@@ -180,10 +180,10 @@ async def processar_email():
                     print(f"E-mail enviado para {remetente} com o anexo {arquivo_csv}")
                     
                     # Mover o e-mail processado para a pasta "Lixeira"
-                    result = mail.store(email_id, '+X-GM-LABELS', '\\Trash')
+                    result = mail.store(email_id, '+X-GM-LABELS', '\\Deleted Items')  # Substitua "\\Trash" pelo nome correto da pasta se necessário
                     if result[0] != 'OK':
                         raise HTTPException(status_code=500, detail="Não foi possível mover o e-mail para a pasta Lixeira.")
-                    mail.expunge()
+                    mail.expunge()  # Confirmar a operação de mover para a Lixeira
                     
                     return {"message": f"Email enviado para {remetente} e movido para a pasta Lixeira."}
                 else:

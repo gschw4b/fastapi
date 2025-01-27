@@ -9,6 +9,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
+from email.header import decode_header
 from fastapi import FastAPI, HTTPException
 
 app = FastAPI()
@@ -85,6 +86,43 @@ def enviar_email_com_anexo(to_email, subject, body, attachment_path):
     except Exception as e:
         print(f"Erro ao enviar o e-mail: {e}")
 
+def deletar_email(email_hash: str):
+    try:
+        # Conectar ao servidor IMAP
+        mail = conectar_imap()
+        
+        # Selecionar a caixa de entrada
+        mail.select('inbox')
+        
+        # Buscar emails com o hash no assunto
+        status, response = mail.search(None, f'SUBJECT "{email_hash}"')
+        if status != "OK":
+            raise Exception("Email não encontrado.")
+        
+        email_ids = response[0].split()
+        if not email_ids:
+            raise Exception("Nenhum email com o hash especificado encontrado.")
+
+        # Marcar como deletado na caixa de entrada
+        for email_id in email_ids:
+            mail.store(email_id, '+FLAGS', '\\Deleted')
+
+        # Expurgar os emails deletados da caixa de entrada
+        mail.expunge()
+        
+        # Agora movemos para a lixeira para garantir a exclusão definitiva
+        mail.select('Trash')  # Ajuste a pasta 'Trash' se necessário
+        for email_id in email_ids:
+            mail.store(email_id, '+FLAGS', '\\Deleted')
+        
+        # Expurgar os emails deletados da lixeira
+        mail.expunge()
+
+        return f"Email com o hash {email_hash} deletado com sucesso."
+    
+    except Exception as e:
+        return f"OK"
+
 @app.post("/processar_email")
 async def processar_email():
     try:
@@ -117,3 +155,9 @@ async def processar_email():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+@app.post("/deletar_email/{email_hash}")
+async def api_deletar_email(email_hash: str):
+    resultado = deletar_email(email_hash)
+    if "Erro" in resultado:
+        raise HTTPException(status_code=500, detail=resultado)
+    return {"message": resultado}

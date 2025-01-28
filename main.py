@@ -5,25 +5,82 @@ import pandas as pd
 import smtplib
 import os
 import uuid
+import psycopg2
+import requests
+from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from email.header import decode_header
-from fastapi import FastAPI, HTTPException
-from sync_orders import app as sync_orders_app
+from fastapi import FastAPI, HTTPException, Depends
 
 app = FastAPI()
 
-app.include_router(sync_orders_app.router)
-
-# Configurações do servidor IMAP e SMTP
+# Configurações gerais
+DB_URL = os.getenv('DB_URL')
+API_URL = "https://api.sigecloud.com.br/request/Pedidos/Pesquisar"
+API_TOKEN = os.getenv('API_TOKEN')
+API_USER = os.getenv('API_USER')
+API_APP = "API"
 IMAP_SERVER = os.getenv('IMAP_SERVER')
 IMAP_PORT = int(os.getenv('IMAP_PORT', 993))
 EMAIL_USER = os.getenv('EMAIL_USER')
 EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
 SMTP_SERVER = os.getenv('SMTP_SERVER')
 SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
+
+# Gerenciador de conexão com o banco
+def get_db_connection():
+    conn = psycopg2.connect(DB_URL)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+# Dependência para injeção de conexão
+def get_db_cursor():
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        try:
+            yield cursor
+            conn.commit()
+        except:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+
+# Funções auxiliares para sincronização de pedidos
+def get_existing_codes(cursor):
+    cursor.execute("SELECT codigo_pedido FROM pedidos")
+    return {row[0] for row in cursor.fetchall()}
+
+def fetch_new_orders():
+    today = datetime.now().strftime("%Y-%m-%d")
+    headers = {
+        "Authorization-Token": API_TOKEN,
+        "User": API_USER,
+        "App": API_APP
+    }
+    params = {"dataInicial": today}
+
+    try:
+        response = requests.get(API_URL, headers=headers, params=params)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.HTTPError as e:
+        print(f"Erro HTTP: {e}\nResposta: {response.text}")
+        raise
+    except Exception as e:
+        print(f"Erro inesperado: {e}")
+        raise
+
+def insert_new_orders(cursor, new_orders):
+    cursor.executemany(
+        "INSERT INTO pedidos (codigo_pedido, cliente, vendedor, data_envio, uf, periodicidade) VALUES (%s, %s, %s, %s, %s, %s)",
+        new_orders
+    )
 
 def conectar_imap():
     mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
@@ -125,6 +182,27 @@ def deletar_email(email_hash: str):
     
     except Exception as e:
         return f"OK"
+    
+# Endpoints
+@app.post("/sync-orders")
+async def sync_orders(cursor = Depends(get_db_cursor)):
+    try:
+        existing_codes = get_existing_codes(cursor)
+        orders = fetch_new_orders()
+        
+        new_orders = [
+            (order['ID'], order.get('Cliente', ''), order.get('Vendedor', ''),
+             order.get('DataEnvio'), order.get('UF'), order.get('Periodicidade'))
+            for order in orders if order['ID'] not in existing_codes
+        ]
+
+        if new_orders:
+            insert_new_orders(cursor, new_orders)
+            return {"status": "success", "message": f"{len(new_orders)} novos pedidos inseridos"}
+        return {"status": "success", "message": "Nenhum novo pedido encontrado"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/processar_email")
 async def processar_email():

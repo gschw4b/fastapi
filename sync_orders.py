@@ -48,16 +48,35 @@ def fetch_new_orders():
         "User": API_USER,
         "App": API_APP
     }
-    response = requests.get(API_URL, headers=headers, params={"dataInicial": today})
-    response.raise_for_status()
-    return response.json()
+    params = {"dataInicial": today}
 
-def insert_new_orders(cursor, new_orders):
-    insert_query = """
-    INSERT INTO pedidos (codigo_pedido, cliente, vendedor, data_envio, uf, periodicidade)
-    VALUES (%s, %s, %s, %s, %s, %s)
-    """
-    cursor.executemany(insert_query, new_orders)
+    # Log dos detalhes da requisição
+    print(f"Fazendo requisição para: {API_URL}")
+    print(f"Headers: {headers}")
+    print(f"Params: {params}")
+
+    try:
+        response = requests.get(API_URL, headers=headers, params=params)
+
+        # Log da resposta da API
+        print(f"Status Code: {response.status_code}")
+        print(f"Resposta da API: {response.text}")
+
+        # Levanta uma exceção se a resposta não for bem-sucedida
+        response.raise_for_status()
+
+        # Retorna o JSON da resposta
+        return response.json()
+
+    except requests.exceptions.HTTPError as e:
+        # Log detalhado do erro HTTP
+        print(f"Erro na requisição HTTP: {e}")
+        print(f"Resposta da API (em caso de erro): {response.text}")
+        raise
+    except Exception as e:
+        # Log de erros inesperados
+        print(f"Erro inesperado: {e}")
+        raise
 
 # Endpoint principal
 @app.post("/sync-orders")

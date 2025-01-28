@@ -11,7 +11,7 @@ from email.mime.base import MIMEBase
 from email import encoders
 from email.header import decode_header
 from fastapi import FastAPI, HTTPException
-from teste_sync_orders import app as sync_orders_app
+from sync_orders import app as sync_orders_app
 
 app = FastAPI()
 

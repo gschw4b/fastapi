@@ -60,7 +60,7 @@ def insert_new_orders(cursor, new_orders):
     cursor.executemany(insert_query, new_orders)
 
 # Endpoint principal
-@app.post("/sync-orders")
+@app.post("/teste-sync-orders")
 async def sync_orders(cursor = Depends(get_db_cursor)):
     try:
         existing_codes = get_existing_codes(cursor)

@@ -11,8 +11,11 @@ from email.mime.base import MIMEBase
 from email import encoders
 from email.header import decode_header
 from fastapi import FastAPI, HTTPException
+from sync_orders import app as sync_orders_app
 
 app = FastAPI()
+
+app.include_router(sync_orders_app.router)
 
 # Configurações do servidor IMAP e SMTP
 IMAP_SERVER = os.getenv('IMAP_SERVER')

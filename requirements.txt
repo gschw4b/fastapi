@@ -2,3 +2,5 @@ fastapi==0.100.0
 hypercorn==0.14.4
 pandas
 openpyxl==3.1.2
+requests==2.31.0
+psycopg2==2.9.9

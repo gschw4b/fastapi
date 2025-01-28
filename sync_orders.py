@@ -62,7 +62,6 @@ def insert_new_orders(cursor, new_orders):
 # Endpoint principal
 @app.post("/sync-orders")
 async def sync_orders(cursor = Depends(get_db_cursor)):
-    print(f"Token teste: {API_TOKEN}")
     try:
         existing_codes = get_existing_codes(cursor)
         orders = fetch_new_orders()

@@ -9,10 +9,10 @@ app = FastAPI()
 
 # Configurações do banco de dados e API
 DB_URL = os.getenv('DB_URL')
-API_URL = os.getenv('API_URL', "https://api.sigecloud.com.br/request/Pedidos/Pesquisar")
+API_URL = "https://api.sigecloud.com.br/request/Pedidos/Pesquisar"
 API_TOKEN = os.getenv('API_TOKEN')
 API_USER = os.getenv('API_USER')
-API_APP = os.getenv('API_APP', "API")
+API_APP = "API"
 
 # Gerenciador de conexão com o banco
 @contextmanager
@@ -62,6 +62,7 @@ def insert_new_orders(cursor, new_orders):
 # Endpoint principal
 @app.post("/sync-orders")
 async def sync_orders(cursor = Depends(get_db_cursor)):
+    print(f"Token teste: {API_TOKEN}")
     try:
         existing_codes = get_existing_codes(cursor)
         orders = fetch_new_orders()

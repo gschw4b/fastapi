@@ -13,7 +13,9 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from email.header import decode_header
+from contextlib import contextmanager
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.concurrency import run_in_threadpool
 
 app = FastAPI()
 
@@ -30,7 +32,7 @@ EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
 SMTP_SERVER = os.getenv('SMTP_SERVER')
 SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
 
-# Gerenciador de conexão com o banco
+@contextmanager
 def get_db_connection():
     conn = psycopg2.connect(DB_URL)
     try:
@@ -38,18 +40,14 @@ def get_db_connection():
     finally:
         conn.close()
 
-# Dependência para injeção de conexão
-def get_db_cursor():
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
+def get_db_cursor(conn = Depends(get_db_connection)):
+    with conn.cursor() as cursor:
         try:
             yield cursor
             conn.commit()
         except:
             conn.rollback()
             raise
-        finally:
-            cursor.close()
 
 # Funções auxiliares para sincronização de pedidos
 def get_existing_codes(cursor):
@@ -78,7 +76,7 @@ def fetch_new_orders():
 
 def insert_new_orders(cursor, new_orders):
     cursor.executemany(
-        "INSERT INTO pedidos (codigo_pedido, cliente, vendedor, data_envio, uf, periodicidade) VALUES (%s, %s, %s, %s, %s, %s)",
+        "INSERT INTO pedidos (codigo_pedido, cliente, vendedor, data_envio, uf) VALUES (%s, %s, %s, %s, %s)",
         new_orders
     )
 
@@ -185,14 +183,23 @@ def deletar_email(email_hash: str):
     
 # Endpoints
 @app.post("/sync-orders")
-async def sync_orders(cursor = Depends(get_db_cursor)):
+async def sync_orders(conn = Depends(get_db_connection)):
+    return await run_in_threadpool(sync_orders_task, conn)
+
+def sync_orders_task(conn):
+    cursor = conn.cursor()
     try:
         existing_codes = get_existing_codes(cursor)
         orders = fetch_new_orders()
         
         new_orders = [
-            (order['ID'], order.get('Cliente', ''), order.get('Vendedor', ''),
-             order.get('DataEnvio'), order.get('UF'), order.get('Periodicidade'))
+            (
+                order['ID'],
+                order.get('Cliente', ''),
+                order.get('Vendedor', ''),
+                order.get('DataEnvio'),
+                order.get('UF')
+             )
             for order in orders if order['ID'] not in existing_codes
         ]
 

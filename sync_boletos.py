@@ -6,6 +6,7 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException, Depends
 from contextlib import contextmanager
 from typing import List, Dict, Any
+from datetime import datetime
 import logging
 
 # Configuração de logging
@@ -57,8 +58,14 @@ def fetch_clientes_mapping(cursor) -> Dict[str, int]:
         logger.error(f"Erro ao buscar clientes: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro ao buscar clientes: {str(e)}")
 
-def fetch_boletos_from_api(page: int = 1, pageSize: int = int(PAGE_SIZE), data_inicial: str = None) -> List[Dict[str, Any]]:
-    """Busca dados de boletos da API com paginação e filtro por data inicial"""
+def fetch_boletos_from_api(
+    page: int = 1,
+    pageSize: int = int(PAGE_SIZE),
+    data_inicial: str = datetime.now().isoformat()  # Data atual como valor padrão
+) -> List[Dict[str, Any]]:
+    """
+    Busca dados de boletos da API com paginação e filtro por data inicial.
+    """
     try:
         headers = {
             "Authorization-Token": API_TOKEN,
@@ -73,9 +80,9 @@ def fetch_boletos_from_api(page: int = 1, pageSize: int = int(PAGE_SIZE), data_i
         }
         
         if data_inicial:
-            params['dataInicial'] = data_inicial  # Adiciona o filtro de data inicial se fornecido
+            params['dataInicial'] = data_inicial  # Adiciona o filtro de data inicial
         
-        logger.info(f"Buscando boletos da API (página {page})...")
+        logger.info(f"Buscando boletos da API (página {page}) com data inicial: {data_inicial}...")
         response = requests.get(API_BOLETOS_URL, headers=headers, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()

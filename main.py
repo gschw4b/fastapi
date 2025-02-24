@@ -14,12 +14,14 @@ from fastapi import FastAPI, HTTPException
 from sync_orders import app as sync_orders_app
 from sync_products import app as sync_products_app
 from sync_customers import app as sync_customers_app
+from sync_boletos import app as sync_boletos_app
 
 app = FastAPI()
 
 app.include_router(sync_orders_app.router)
 app.include_router(sync_products_app.router)
 app.include_router(sync_customers_app.router)
+app.include_router(sync_boletos_app.router)
 
 # Configurações do servidor IMAP e SMTP
 IMAP_SERVER = os.getenv('IMAP_SERVER')

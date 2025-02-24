@@ -6,6 +6,11 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException, Depends
 from contextlib import contextmanager
 from typing import List, Dict, Any
+import logging
+
+# Configuração de logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -33,16 +38,24 @@ def get_db_cursor():
         try:
             yield cursor
             conn.commit()
-        except:
+        except Exception as e:
             conn.rollback()
-            raise
+            logger.error(f"Erro no banco de dados: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Erro no banco: {str(e)}")
         finally:
             cursor.close()
 
 def fetch_clientes_mapping(cursor) -> Dict[str, int]:
     """Busca mapeamento de razão social para ID de clientes"""
-    cursor.execute("SELECT id, razao_social FROM clientes")
-    return {razao.strip().lower(): cliente_id for cliente_id, razao in cursor.fetchall()}
+    try:
+        logger.info("Buscando mapeamento de clientes...")
+        cursor.execute("SELECT id, razao_social FROM clientes")
+        client_map = {razao.strip().lower(): cliente_id for cliente_id, razao in cursor.fetchall() if razao}
+        logger.info(f"Mapeamento de {len(client_map)} clientes carregado")
+        return client_map
+    except Exception as e:
+        logger.error(f"Erro ao buscar clientes: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar clientes: {str(e)}")
 
 def fetch_boletos_from_api(page: int = 1, pageSize: int = int(PAGE_SIZE), data_inicial: str = None) -> List[Dict[str, Any]]:
     """Busca dados de boletos da API com paginação e filtro por data inicial"""
@@ -62,22 +75,38 @@ def fetch_boletos_from_api(page: int = 1, pageSize: int = int(PAGE_SIZE), data_i
         if data_inicial:
             params['dataInicial'] = data_inicial  # Adiciona o filtro de data inicial se fornecido
         
+        logger.info(f"Buscando boletos da API (página {page})...")
         response = requests.get(API_BOLETOS_URL, headers=headers, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        logger.info(f"Boletos recebidos com sucesso (página {page})")
+        return data
     except requests.exceptions.RequestException as e:
+        logger.error(f"Erro na requisição à API: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro na API: {str(e)}")
 
 def transform_boleto_data(api_data: List[Dict[str, Any]], clientes_map: Dict[str, int]) -> List[Dict[str, Any]]:
     """Transforma os dados da API para o formato do banco de dados"""
     transformed = []
     
+    if not api_data:
+        logger.warning("Resposta da API vazia ou inválida")
+        return transformed
+    
     for item in api_data:
         try:
+            # Verifica se o item é válido
+            if not item or 'Id' not in item:
+                logger.warning(f"Ignorando item inválido: {item}")
+                continue
+
+            # Conversão de datas
             data_emissao = datetime.fromisoformat(item['DataEmissao']).date() if item.get('DataEmissao') else None
             data_vencimento = datetime.fromisoformat(item['DataVencimento']).date() if item.get('DataVencimento') else None
             
-            sacado = item.get('Sacado', '').strip().lower()
+            # Tratamento do campo 'Sacado' para evitar None
+            sacado = item.get('Sacado', '') or ''  # Garante que sacado seja uma string vazia se for None
+            sacado = sacado.strip().lower()  # Agora podemos chamar .strip() com segurança
             id_cliente = clientes_map.get(sacado)
 
             transformed.append({
@@ -96,13 +125,16 @@ def transform_boleto_data(api_data: List[Dict[str, Any]], clientes_map: Dict[str
                 'multa_apos_vencimento': Decimal(str(item.get('MultaAposVencimento', 0)))
             })
         except (KeyError, ValueError) as e:
+            logger.warning(f"Erro ao processar boleto {item.get('Id')}: {str(e)}")
             continue  # Ignora boletos inválidos
             
+    logger.info(f"{len(transformed)} boletos transformados com sucesso")
     return transformed
 
 def upsert_boletos(cursor, boletos: List[Dict[str, Any]]):
     """Realiza UPSERT dos boletos no banco de dados"""
     if not boletos:
+        logger.warning("Nenhum boleto para inserir/atualizar")
         return 0
     
     upsert_query = """
@@ -142,8 +174,14 @@ def upsert_boletos(cursor, boletos: List[Dict[str, Any]]):
         boleto['multa_apos_vencimento']
     ) for boleto in boletos]
 
-    cursor.executemany(upsert_query, batch_data)
-    return len(boletos)
+    try:
+        logger.info("Iniciando inserção/atualização de boletos...")
+        cursor.executemany(upsert_query, batch_data)
+        logger.info(f"{len(batch_data)} boletos processados com sucesso")
+        return len(batch_data)
+    except Exception as e:
+        logger.error(f"Erro ao inserir/atualizar boletos: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao inserir/atualizar boletos: {str(e)}")
 
 @app.post("/sync-boletos")
 async def sync_boletos(cursor = Depends(get_db_cursor)):
@@ -169,7 +207,6 @@ async def sync_boletos(cursor = Depends(get_db_cursor)):
             "total_available": len(transformed_boletos)
         }
         
-    except psycopg2.DatabaseError as e:
-        raise HTTPException(status_code=500, detail=f"Erro no banco: {str(e)}")
     except Exception as e:
+        logger.error(f"Erro inesperado: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro inesperado: {str(e)}")

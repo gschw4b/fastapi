@@ -52,13 +52,14 @@ def decode_filename(raw_filename):
 
 def baixar_anexo(mail, email_id):
     status, response = mail.fetch(email_id, '(RFC822)')
+    if status != 'OK':
+        return None
+
     for response_part in response:
         if isinstance(response_part, tuple):
             msg = email.message_from_bytes(response_part[1])
             for part in msg.walk():
-                content_type = part.get_content_type()
                 filename = part.get_filename()
-
                 if filename:
                     filename = decode_filename(filename)
                     if filename.lower().endswith('.xlsx'):

@@ -10,6 +10,7 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from email.header import decode_header
+from email.utils import parsedate_to_datetime
 from fastapi import FastAPI, HTTPException
 from sync_orders import app as sync_orders_app
 from sync_products import app as sync_products_app
@@ -42,16 +43,25 @@ def buscar_emails_nao_lidos(mail):
     email_ids = response[0].split()
     return email_ids
 
+def decode_filename(raw_filename):
+    decoded_tuple = decode_header(raw_filename)
+    decoded_str, charset = decoded_tuple[0]
+    if isinstance(decoded_str, bytes):
+        return decoded_str.decode(charset or 'utf-8')
+    return decoded_str
+
 def baixar_anexo(mail, email_id):
     status, response = mail.fetch(email_id, '(RFC822)')
     for response_part in response:
         if isinstance(response_part, tuple):
             msg = email.message_from_bytes(response_part[1])
             for part in msg.walk():
-                content_disposition = str(part.get("Content-Disposition"))
-                if 'attachment' in content_disposition:
-                    filename = part.get_filename()
-                    if filename.endswith('.xlsx'):
+                content_type = part.get_content_type()
+                filename = part.get_filename()
+
+                if filename:
+                    filename = decode_filename(filename)
+                    if filename.lower().endswith('.xlsx'):
                         file_data = part.get_payload(decode=True)
                         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
                         temp_file.write(file_data)
